@@ -1,0 +1,24 @@
+Year,ISO_Date,Display_Date,Day_of_Week,Bank_Holiday
+Wales2026,2026-04-03,3 April,Friday,Good Friday
+Wales2026,2026-04-06,6 April,Monday,Easter Monday
+Wales2026,2026-05-04,4 May,Monday,Early May bank holiday
+Wales2026,2026-05-25,25 May,Monday,Spring bank holiday
+Wales2026,2026-08-31,31 August,Monday,Summer bank holiday
+Wales2026,2026-12-25,25 December,Friday,Christmas Day
+Wales2026,2026-12-28,28 December,Monday,Boxing Day (substitute day)
+Wales2027,2027-01-01,1 January,Friday,New Year’s Day
+Wales2027,2027-03-26,26 March,Friday,Good Friday
+Wales2027,2027-03-29,29 March,Monday,Easter Monday
+Wales2027,2027-05-03,3 May,Monday,Early May bank holiday
+Wales2027,2027-05-31,31 May,Monday,Spring bank holiday
+Wales2027,2027-08-30,30 August,Monday,Summer bank holiday
+Wales2027,2027-12-27,27 December,Monday,Christmas Day (substitute day)
+Wales2027,2027-12-28,28 December,Tuesday,Boxing Day (substitute day)
+Wales2028,2028-01-03,3 January,Monday,New Year’s Day (substitute day)
+Wales2028,2028-04-14,14 April,Friday,Good Friday
+Wales2028,2028-04-17,17 April,Monday,Easter Monday
+Wales2028,2028-05-01,1 May,Monday,Early May bank holiday
+Wales2028,2028-05-29,29 May,Monday,Spring bank holiday
+Wales2028,2028-08-28,28 August,Monday,Summer bank holiday
+Wales2028,2028-12-25,25 December,Monday,Christmas Day
+Wales2028,2028-12-26,26 December,Tuesday,Boxing Day
