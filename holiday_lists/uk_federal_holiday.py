@@ -1,11 +1,19 @@
 import cloudscraper
 from bs4 import BeautifulSoup
-import csv
 import sys
+import json
+import uuid
+import os
+from datetime import datetime
 
+# ===================================
+# 1️⃣ URL
+# ===================================
 url = "https://www.gov.uk/bank-holidays"
 
-# Create Cloudflare-safe scraper
+# ===================================
+# 2️⃣ Cloudflare-safe scraper
+# ===================================
 scraper = cloudscraper.create_scraper(
     browser={
         "browser": "chrome",
@@ -23,61 +31,98 @@ if response.status_code != 200:
 
 soup = BeautifulSoup(response.text, "html.parser")
 
-# Get all holiday tables
+# ===================================
+# 3️⃣ Extract First 3 Holiday Tables
+# ===================================
 tables = soup.find_all("table", class_="gem-c-table")
 
 if len(tables) < 3:
     print("❌ Less than 3 tables found")
     sys.exit()
 
-# Only first 3 tables
 tables = tables[:3]
 
 print(f"✅ Extracting first {len(tables)} tables")
 
-all_data = []
+output_data = []
 
+# ===================================
+# 4️⃣ Extract Data
+# ===================================
 for table in tables:
 
-    # Extract year from caption
     caption = table.find("caption")
-    year = caption.get_text(strip=True).split()[-1] if caption else "Unknown"
+    region = caption.get_text(strip=True) if caption else "Unknown Region"
 
     tbody = table.find("tbody")
 
     for row in tbody.find_all("tr"):
 
-        # Date column (inside <th><time>)
         time_tag = row.find("time")
 
-        iso_date = time_tag["datetime"] if time_tag else ""
-        display_date = time_tag.get_text(strip=True) if time_tag else ""
+        if not time_tag:
+            continue
+
+        iso_date = time_tag.get("datetime")  # Already in YYYY-MM-DD
+        display_date = time_tag.get_text(strip=True)
 
         cells = row.find_all("td")
 
-        if len(cells) >= 2:
-            day_of_week = cells[0].get_text(strip=True)
-            holiday_name = cells[1].get_text(strip=True)
+        if len(cells) < 2:
+            continue
 
-            all_data.append([
-                year,
-                iso_date,
-                display_date,
-                day_of_week,
-                holiday_name
-            ])
+        day_of_week = cells[0].get_text(strip=True)
+        holiday_name = cells[1].get_text(strip=True)
 
-# Save to CSV
-with open("uk_first_3_tables.csv", "w", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
-    writer.writerow([
-        "Year",
-        "ISO_Date",
-        "Display_Date",
-        "Day_of_Week",
-        "Bank_Holiday"
-    ])
-    writer.writerows(all_data)
+        try:
+            parsed_date = datetime.strptime(iso_date, "%Y-%m-%d")
+        except Exception:
+            print(f"⚠️ Date parsing failed: {iso_date}")
+            continue
 
-print("✅ CSV created successfully")
-print("Total records:", len(all_data))
+        now_utc = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+        holiday_json = {
+            "holiday_id": str(uuid.uuid4()),
+            "holiday_country_code": "GBR",
+            "holiday_region": region,
+            "holiday_date": iso_date,
+            "holiday_month": parsed_date.month,
+            "holiday_year": parsed_date.year,
+            "holiday_day_of_week": day_of_week,
+            "holiday_name": holiday_name,
+            "is_bank_holiday": True,
+            "holiday_source_url": url,
+            "created_at": now_utc,
+            "updated_at": now_utc
+        }
+
+        output_data.append(holiday_json)
+
+print(f"✅ Records scraped: {len(output_data)}")
+
+# ===================================
+# 5️⃣ Append to JSON (Simple Logic)
+# ===================================
+output_file = "uk_bank_holidays.json"
+
+if os.path.exists(output_file):
+    with open(output_file, "r", encoding="utf-8") as f:
+        existing_data = json.load(f)
+        existing_data.extend(output_data)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(existing_data, f, indent=4)
+
+else:
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(output_data, f, indent=4)
+
+print("✅ JSON file updated successfully.")
+
+# ===================================
+# 6️⃣ Preview
+# ===================================
+if output_data:
+    print("\n📅 Sample Record:")
+    print(json.dumps(output_data[0], indent=4))

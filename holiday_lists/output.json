@@ -1,0 +1,13 @@
+{
+    "holiday_id": "3f1c2c7e-9a2d-4d8f-b7a4-2c1b6f5e9d12",
+    "holiday_country_code": "USA",
+    "holiday_date": "2026-07-03",
+    "holiday_month": 7,
+    "holiday_year": 2026,
+    "holiday_day_of_week": "Friday",
+    "holiday_name": "Independence Day",
+    "is_bank_holiday": true,
+    "holiday_source_url": "https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/",
+    "created_at": "2026-03-03T10:15:00+00:00",
+    "updated_at": "2026-03-03T10:15:00+00:00"
+}

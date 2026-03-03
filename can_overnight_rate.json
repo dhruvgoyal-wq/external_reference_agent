@@ -1,0 +1,19 @@
+[
+  {
+    "rate_entry_id": "fbf59025-226f-4b3f-bc7d-6b3afd90a06a",
+    "rate_country_code": "CA",
+    "rate_type": "overnight_money_market_financing_rate",
+    "rate_authority_name": "bank_of_canada",
+    "rate_effective_date": "2026-02-26",
+    "rate_expiry_date": null,
+    "is_rate_current": true,
+    "rate_current_value_pct": 2.2531,
+    "rate_current_value_bps": 225,
+    "rate_prev_value_pct": 2.2531,
+    "rate_change_bps": 0,
+    "rate_direction": "HOLD",
+    "rate_source_url": "https://www.bankofcanada.ca/rates/daily-digest/",
+    "created_at": "2026-03-03T05:55:25.253542+00:00",
+    "updated_at": "2026-03-03T05:55:25.253542+00:00"
+  }
+]

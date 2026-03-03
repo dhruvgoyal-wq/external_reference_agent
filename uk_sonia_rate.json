@@ -1,0 +1,19 @@
+[
+  {
+    "rate_entry_id": "545427d5-91c8-4db3-80fc-4e41df8025a5",
+    "rate_country_code": "GB",
+    "rate_type": "sonia_rate",
+    "rate_authority_name": "bank_of_england",
+    "rate_effective_date": "26 Feb 26",
+    "rate_expiry_date": null,
+    "is_rate_current": true,
+    "rate_current_value_pct": 3.7286,
+    "rate_current_value_bps": 372,
+    "rate_prev_value_pct": 3.7276,
+    "rate_change_bps": 0,
+    "rate_direction": "HOLD",
+    "rate_source_url": "https://www.bankofengland.co.uk/boeapps/database/fromshowcolumns.asp?Travel=NIxAZxSUx&FromSeries=1&ToSeries=50&DAT=RNG&FD=1&FM=Jan&FY=2020&TD=1&TM=Jan&TY=2040&FNY=Y&CSVF=TT&html.x=66&html.y=26&SeriesCodes=IUDSOIA&UsingCodes=Y&Filter=N&title=SONIA%20rate&VPD=Y#notes",
+    "created_at": "2026-03-03T06:21:26.465191+00:00",
+    "updated_at": "2026-03-03T06:21:26.465191+00:00"
+  }
+]

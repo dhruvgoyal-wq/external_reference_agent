@@ -1,134 +1,10 @@
-# import cloudscraper
-# from bs4 import BeautifulSoup
-# import csv
-# import sys
-
-# # ==============================
-# # 1️⃣ Provide URL Here
-# # ==============================
-# url = "https://www.frbservices.org/about/holiday-schedules/#fedcash-holiday"
-
-
-# def fetch_page(url):
-#     """Fetch page using cloudscraper to bypass bot protection."""
-#     scraper = cloudscraper.create_scraper()
-#     response = scraper.get(url)
-
-#     if response.status_code != 200:
-#         print(f"❌ Failed to fetch page: {response.status_code}")
-#         sys.exit()
-
-#     return response.text
-
-
-# def extract_table(soup):
-#     """Locate the FedACH holiday table."""
-#     table = soup.find("table", class_="table table-striped table-hover")
-
-#     if not table:
-#         print("❌ Target table not found.")
-#         sys.exit()
-
-#     return table
-
-
-# def extract_headers(table):
-#     """Extract headers safely (handles multi-row thead)."""
-#     thead = table.find("thead")
-
-#     if not thead:
-#         print("❌ No <thead> found.")
-#         sys.exit()
-
-#     header_rows = thead.find_all("tr")
-
-#     final_headers = []
-
-#     # Case: Multi-row header (like your example)
-#     if len(header_rows) == 2:
-#         first_row = header_rows[0].find_all("th")
-#         second_row = header_rows[1].find_all("th")
-
-#         # First column header (Holiday)
-#         final_headers.append(first_row[0].get_text(strip=True))
-
-#         # Year (colspan header)
-#         year = first_row[1].get_text(strip=True)
-
-#         # Combine year with second row headers
-#         for th in second_row:
-#             sub_header = th.get_text(strip=True)
-#             final_headers.append(f"{year} - {sub_header}")
-
-#     else:
-#         # Fallback: single row header
-#         for th in header_rows[0].find_all("th"):
-#             final_headers.append(th.get_text(strip=True))
-
-#     return final_headers
-
-
-# def extract_body(table):
-#     """Extract table body rows."""
-#     tbody = table.find("tbody")
-
-#     if not tbody:
-#         print("❌ No <tbody> found.")
-#         sys.exit()
-
-#     data = []
-
-#     for row in tbody.find_all("tr"):
-#         row_data = []
-
-#         # Holiday name
-#         holiday_cell = row.find("th")
-#         if holiday_cell:
-#             row_data.append(holiday_cell.get_text(strip=True))
-#         else:
-#             row_data.append("")
-
-#         # Other columns
-#         for td in row.find_all("td"):
-#             row_data.append(td.get_text(strip=True))
-
-#         data.append(row_data)
-
-#     return data
-
-
-# def save_to_csv(headers, data):
-#     """Save extracted data to CSV."""
-#     filename = "fedach_processing_schedule.csv"
-
-#     with open(filename, mode="w", newline="", encoding="utf-8") as file:
-#         writer = csv.writer(file)
-#         writer.writerow(headers)
-#         writer.writerows(data)
-
-#     print(f"✅ CSV successfully created: {filename}")
-
-
-# # ==============================
-# # 🚀 MAIN EXECUTION
-# # ==============================
-
-# html = fetch_page(url)
-# soup = BeautifulSoup(html, "html.parser")
-
-# table = extract_table(soup)
-# headers = extract_headers(table)
-# data = extract_body(table)
-
-# save_to_csv(headers, data)
-
-
-
-
 import cloudscraper
 from bs4 import BeautifulSoup
-import csv
 import sys
+import json
+import uuid
+import os
+from datetime import datetime
 
 # ===================================
 # 1️⃣ Provide URL
@@ -148,7 +24,7 @@ if response.status_code != 200:
 soup = BeautifulSoup(response.text, "html.parser")
 
 # ===================================
-# 3️⃣ Find the FedACH Table Using Caption
+# 3️⃣ Locate FedACH Table Using Caption
 # ===================================
 tables = soup.find_all("table", class_="table table-striped table-hover")
 
@@ -167,49 +43,113 @@ if not target_table:
 print("✅ FedACH table found")
 
 # ===================================
-# 4️⃣ Extract Headers (Multi-row Safe)
+# 4️⃣ Month Normalization Map
 # ===================================
-thead = target_table.find("thead")
-header_rows = thead.find_all("tr")
-
-final_headers = []
-
-if len(header_rows) == 2:
-    first_row = header_rows[0].find_all("th")
-    second_row = header_rows[1].find_all("th")
-
-    final_headers.append(first_row[0].get_text(strip=True))  # Holiday
-    year = first_row[1].get_text(strip=True)
-
-    for th in second_row:
-        final_headers.append(f"{year} - {th.get_text(strip=True)}")
-else:
-    for th in header_rows[0].find_all("th"):
-        final_headers.append(th.get_text(strip=True))
+month_map = {
+    "Jan.": "January",
+    "Feb.": "February",
+    "Mar.": "March",
+    "Apr.": "April",
+    "May": "May",
+    "June": "June",
+    "July": "July",
+    "Aug.": "August",
+    "Sept.": "September",
+    "Oct.": "October",
+    "Nov.": "November",
+    "Dec.": "December"
+}
 
 # ===================================
-# 5️⃣ Extract Body Rows
+# 5️⃣ Extract Body & Convert to JSON
 # ===================================
 tbody = target_table.find("tbody")
-data = []
+output_data = []
 
 for row in tbody.find_all("tr"):
-    row_data = []
 
-    holiday = row.find("th").get_text(strip=True)
-    row_data.append(holiday)
+    holiday_header = row.find("th")
+    if not holiday_header:
+        continue
 
-    for td in row.find_all("td"):
-        row_data.append(td.get_text(strip=True))
+    holiday_name = holiday_header.get_text(strip=True)
 
-    data.append(row_data)
+    for cell in row.find_all("td"):
+        date_text = cell.get_text(strip=True)
+
+        if not date_text:
+            continue
+
+        # -----------------------------------
+        # Clean Date (Remove Time + TZ)
+        # -----------------------------------
+        # Example: "Dec. 31, 2025, 11:30 p.m. ET"
+        parts = date_text.split(",")
+        if len(parts) >= 2:
+            clean_date = parts[0] + "," + parts[1]
+        else:
+            clean_date = date_text
+
+        clean_date = clean_date.strip()
+
+        # -----------------------------------
+        # Normalize abbreviated months
+        # -----------------------------------
+        for short, full in month_map.items():
+            if short in clean_date:
+                clean_date = clean_date.replace(short, full)
+
+        # -----------------------------------
+        # Parse Date
+        # -----------------------------------
+        try:
+            parsed_date = datetime.strptime(clean_date, "%B %d, %Y")
+        except Exception:
+            print(f"⚠️ Date parsing failed: {date_text}")
+            continue
+
+        now_utc = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+        holiday_json = {
+            "holiday_id": str(uuid.uuid4()),
+            "holiday_country_code": "USA",
+            "holiday_date": parsed_date.strftime("%Y-%m-%d"),
+            "holiday_month": parsed_date.month,
+            "holiday_year": parsed_date.year,
+            "holiday_day_of_week": parsed_date.strftime("%A"),
+            "holiday_name": holiday_name,
+            "is_bank_holiday": True,
+            "holiday_source_url": url,
+            "created_at": now_utc,
+            "updated_at": now_utc
+        }
+
+        output_data.append(holiday_json)
+
+print(f"✅ Records scraped: {len(output_data)}")
 
 # ===================================
-# 6️⃣ Save to CSV
+# 6️⃣ Append to JSON (Simple Extend Logic)
 # ===================================
-with open("fedach_holiday_processing_schedule.csv", "w", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
-    writer.writerow(final_headers)
-    writer.writerows(data)
+output_file = "us_fedach_holiday_schedule.json"
 
-print("✅ CSV created: fedach_holiday_processing_schedule.csv")
+if os.path.exists(output_file):
+    with open(output_file, "r", encoding="utf-8") as f:
+        existing_data = json.load(f)
+        existing_data.extend(output_data)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(existing_data, f, indent=4)
+
+else:
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(output_data, f, indent=4)
+
+print("✅ JSON file updated successfully.")
+
+# ===================================
+# 7️⃣ Preview
+# ===================================
+if output_data:
+    print("\n📅 Sample Record:")
+    print(json.dumps(output_data[0], indent=4))

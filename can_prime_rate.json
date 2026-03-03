@@ -1,0 +1,19 @@
+[
+  {
+    "rate_entry_id": "cdbd354b-683c-45c0-a1c7-bc466df8b3c5",
+    "rate_country_code": "CA",
+    "rate_type": "prime_rate",
+    "rate_authority_name": "bank_of_canada",
+    "rate_effective_date": "2026-02-18",
+    "rate_expiry_date": null,
+    "is_rate_current": true,
+    "rate_current_value_pct": 4.45,
+    "rate_current_value_bps": 445,
+    "rate_prev_value_pct": 4.45,
+    "rate_change_bps": 0,
+    "rate_direction": "HOLD",
+    "rate_source_url": "https://www.bankofcanada.ca/rates/daily-digest/",
+    "created_at": "2026-03-03T06:06:05.695324+00:00",
+    "updated_at": "2026-03-03T06:06:05.695324+00:00"
+  }
+]
