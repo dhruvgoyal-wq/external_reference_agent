@@ -4,7 +4,7 @@ import sys
 import json
 import uuid
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 # ===================================
 # 1️⃣ Provide URL
@@ -61,13 +61,29 @@ month_map = {
 }
 
 # ===================================
-# 5️⃣ Extract Body & Convert to JSON
+# 5️⃣ Load Existing Data for Duplicate Check
+# ===================================
+output_file = "us_fedach_holiday_schedule.json"
+existing_dates = set()
+
+if os.path.exists(output_file):
+    try:
+        with open(output_file, "r", encoding="utf-8") as f:
+            existing_data = json.load(f)
+            existing_dates = {item["holiday_date"] for item in existing_data if "holiday_date" in item}
+    except Exception as e:
+        print(f"⚠️ Could not load existing data: {e}")
+        existing_data = []
+else:
+    existing_data = []
+
+# ===================================
+# 6️⃣ Extract Body & Convert to JSON
 # ===================================
 tbody = target_table.find("tbody")
-output_data = []
+new_records = []
 
 for row in tbody.find_all("tr"):
-
     holiday_header = row.find("th")
     if not holiday_header:
         continue
@@ -76,14 +92,10 @@ for row in tbody.find_all("tr"):
 
     for cell in row.find_all("td"):
         date_text = cell.get_text(strip=True)
-
         if not date_text:
             continue
 
-        # -----------------------------------
         # Clean Date (Remove Time + TZ)
-        # -----------------------------------
-        # Example: "Dec. 31, 2025, 11:30 p.m. ET"
         parts = date_text.split(",")
         if len(parts) >= 2:
             clean_date = parts[0] + "," + parts[1]
@@ -92,28 +104,29 @@ for row in tbody.find_all("tr"):
 
         clean_date = clean_date.strip()
 
-        # -----------------------------------
         # Normalize abbreviated months
-        # -----------------------------------
         for short, full in month_map.items():
             if short in clean_date:
                 clean_date = clean_date.replace(short, full)
 
-        # -----------------------------------
-        # Parse Date
-        # -----------------------------------
         try:
             parsed_date = datetime.strptime(clean_date, "%B %d, %Y")
+            formatted_date = parsed_date.strftime("%Y-%m-%d")
+            
+            # Duplicate check
+            if formatted_date in existing_dates:
+                continue
+
         except Exception:
             print(f"⚠️ Date parsing failed: {date_text}")
             continue
 
-        now_utc = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        now_utc = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
         holiday_json = {
             "holiday_id": str(uuid.uuid4()),
             "holiday_country_code": "USA",
-            "holiday_date": parsed_date.strftime("%Y-%m-%d"),
+            "holiday_date": formatted_date,
             "holiday_month": parsed_date.month,
             "holiday_year": parsed_date.year,
             "holiday_day_of_week": parsed_date.strftime("%A"),
@@ -123,33 +136,22 @@ for row in tbody.find_all("tr"):
             "created_at": now_utc,
             "updated_at": now_utc
         }
-
-        output_data.append(holiday_json)
-
-print(f"✅ Records scraped: {len(output_data)}")
+        new_records.append(holiday_json)
 
 # ===================================
-# 6️⃣ Append to JSON (Simple Extend Logic)
+# 7️⃣ Save Data
 # ===================================
-output_file = "us_fedach_holiday_schedule.json"
-
-if os.path.exists(output_file):
-    with open(output_file, "r", encoding="utf-8") as f:
-        existing_data = json.load(f)
-        existing_data.extend(output_data)
-
+if new_records:
+    existing_data.extend(new_records)
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(existing_data, f, indent=4)
-
+    print(f"✅ Added {len(new_records)} new records.")
 else:
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, indent=4)
-
-print("✅ JSON file updated successfully.")
+    print("ℹ️ No new holidays found.")
 
 # ===================================
-# 7️⃣ Preview
+# 8️⃣ Preview Newest
 # ===================================
-if output_data:
-    print("\n📅 Sample Record:")
-    print(json.dumps(output_data[0], indent=4))
+if new_records:
+    print("\n📅 Sample New Record:")
+    print(json.dumps(new_records[0], indent=4))

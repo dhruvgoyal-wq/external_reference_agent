@@ -4,7 +4,7 @@ import sys
 import json
 import uuid
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 # ===================================
 # 1️⃣ URL
@@ -41,33 +41,51 @@ if len(tables) < 3:
     sys.exit()
 
 tables = tables[:3]
-
 print(f"✅ Extracting first {len(tables)} tables")
 
-output_data = []
+# ===================================
+# 4️⃣ Load Existing Data for Duplicate Check
+# ===================================
+output_file = "uk_bank_holidays.json"
+existing_keys = set() # (region, date)
+
+if os.path.exists(output_file):
+    try:
+        with open(output_file, "r", encoding="utf-8") as f:
+            existing_data = json.load(f)
+            existing_keys = {
+                (item.get("holiday_region"), item.get("holiday_date")) 
+                for item in existing_data 
+                if "holiday_region" in item and "holiday_date" in item
+            }
+    except Exception as e:
+        print(f"⚠️ Could not load existing data: {e}")
+        existing_data = []
+else:
+    existing_data = []
 
 # ===================================
-# 4️⃣ Extract Data
+# 5️⃣ Extract Data
 # ===================================
+new_records = []
+
 for table in tables:
-
     caption = table.find("caption")
     region = caption.get_text(strip=True) if caption else "Unknown Region"
-
     tbody = table.find("tbody")
 
     for row in tbody.find_all("tr"):
-
         time_tag = row.find("time")
-
         if not time_tag:
             continue
 
-        iso_date = time_tag.get("datetime")  # Already in YYYY-MM-DD
-        display_date = time_tag.get_text(strip=True)
+        iso_date = time_tag.get("datetime")  # YYYY-MM-DD
+        
+        # Duplicate check: Region + Date
+        if (region, iso_date) in existing_keys:
+            continue
 
         cells = row.find_all("td")
-
         if len(cells) < 2:
             continue
 
@@ -80,7 +98,7 @@ for table in tables:
             print(f"⚠️ Date parsing failed: {iso_date}")
             continue
 
-        now_utc = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        now_utc = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
         holiday_json = {
             "holiday_id": str(uuid.uuid4()),
@@ -96,33 +114,24 @@ for table in tables:
             "created_at": now_utc,
             "updated_at": now_utc
         }
+        new_records.append(holiday_json)
 
-        output_data.append(holiday_json)
-
-print(f"✅ Records scraped: {len(output_data)}")
+print(f"✅ New records found: {len(new_records)}")
 
 # ===================================
-# 5️⃣ Append to JSON (Simple Logic)
+# 6️⃣ Save Data
 # ===================================
-output_file = "uk_bank_holidays.json"
-
-if os.path.exists(output_file):
-    with open(output_file, "r", encoding="utf-8") as f:
-        existing_data = json.load(f)
-        existing_data.extend(output_data)
-
+if new_records:
+    existing_data.extend(new_records)
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(existing_data, f, indent=4)
-
+    print("✅ JSON file updated successfully.")
 else:
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, indent=4)
-
-print("✅ JSON file updated successfully.")
+    print("ℹ️ No new holidays found.")
 
 # ===================================
-# 6️⃣ Preview
+# 7️⃣ Preview
 # ===================================
-if output_data:
-    print("\n📅 Sample Record:")
-    print(json.dumps(output_data[0], indent=4))
+if new_records:
+    print("\n📅 Sample New Record:")
+    print(json.dumps(new_records[0], indent=4))

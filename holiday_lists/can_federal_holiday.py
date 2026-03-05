@@ -5,10 +5,10 @@ import json
 import uuid
 import os
 import re
-from datetime import datetime
+from datetime import datetime, UTC
 
 # =====================================
-# 1️⃣ URL & Enhanced Headers (UNCHANGED)
+# 1️⃣ URL & Enhanced Headers
 # =====================================
 url = "https://www.payments.ca/system-closure-schedule"
 
@@ -19,11 +19,6 @@ headers = {
     "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
 }
 
 # =====================================
@@ -32,81 +27,94 @@ headers = {
 try:
     session = requests.Session()
     response = session.get(url, headers=headers, timeout=15)
-
     print(f"📡 Status Code: {response.status_code}")
-
     if response.status_code != 200:
         print("❌ Failed to fetch page.")
         sys.exit()
 
-except requests.exceptions.Timeout:
-    print("❌ Request timed out.")
-    sys.exit()
-
-except requests.exceptions.ConnectionError:
-    print("❌ Connection error.")
+except Exception as e:
+    print(f"❌ Request failed: {e}")
     sys.exit()
 
 # =====================================
 # 3️⃣ Parse HTML
 # =====================================
 soup = BeautifulSoup(response.text, "html.parser")
-
 table = soup.find("table")
 
-if not table:
-    print("❌ Table not found.")
+if not table or not table.find("tbody"):
+    print("❌ Holiday table or body not found.")
     sys.exit()
 
 tbody = table.find("tbody")
 
-if not tbody:
-    print("❌ Table body not found.")
-    sys.exit()
+# =====================================
+# 4️⃣ Detect Year (Improved)
+# =====================================
+# Look specifically for the schedule year in headers or title (usually 2024, 2025, 2026 etc.)
+# We ignore "2002" which might appear in some metadata or scripts
+page_title = soup.title.string if soup.title else ""
+h1_text = soup.find("h1").get_text() if soup.find("h1") else ""
 
-# =====================================
-# 4️⃣ Detect Year
-# =====================================
-page_text = soup.get_text()
-year_match = re.search(r"(20\d{2})", page_text)
+year_match = re.search(r"202[4-9]", h1_text + page_title + soup.get_text())
 
 if not year_match:
-    print("❌ Could not detect year.")
+    print("❌ Could not detect a valid schedule year (2024-2029).")
     sys.exit()
 
-detected_year = int(year_match.group(1))
+detected_year = int(year_match.group(0))
 print(f"📅 Detected Year: {detected_year}")
 
 # =====================================
-# 5️⃣ Extract & Transform
+# 5️⃣ Load Existing Data for Duplicate Check
 # =====================================
-output_data = []
+output_file = "canada_system_closures.json"
+existing_dates = set()
+
+if os.path.exists(output_file):
+    try:
+        with open(output_file, "r", encoding="utf-8") as f:
+            existing_data = json.load(f)
+            existing_dates = {item["holiday_date"] for item in existing_data if "holiday_date" in item}
+    except Exception as e:
+        print(f"⚠️ Could not load existing data: {e}")
+        existing_data = []
+else:
+    existing_data = []
+
+# =====================================
+# 6️⃣ Extract & Transform
+# =====================================
+new_records = []
 
 for row in tbody.find_all("tr"):
     cells = row.find_all("td")
-
     if len(cells) >= 2:
         holiday_name = cells[0].get_text(strip=True)
         holiday_date_raw = cells[1].get_text(strip=True)
 
         try:
-            # Format: Thursday, January 1
-            parsed_partial = datetime.strptime(
-                holiday_date_raw, "%A, %B %d"
-            )
+            # Fix deprecation: Prepend year to avoid ambiguity
+            # Raw format: "Thursday, January 1"
+            date_str_with_year = f"{holiday_date_raw} {detected_year}"
+            parsed_date = datetime.strptime(date_str_with_year, "%A, %B %d %Y")
+            formatted_date = parsed_date.strftime("%Y-%m-%d")
 
-            parsed_date = parsed_partial.replace(year=detected_year)
+            # Duplicate Check
+            if formatted_date in existing_dates:
+                # print(f"⏭️ Skipping duplicate: {formatted_date}")
+                continue
 
-        except Exception:
-            print(f"⚠️ Date parsing failed for: {holiday_date_raw}")
+        except Exception as e:
+            print(f"⚠️ Date parsing failed for '{holiday_date_raw}': {e}")
             continue
 
-        now_utc = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        now_utc = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
         holiday_json = {
             "holiday_id": str(uuid.uuid4()),
             "holiday_country_code": "CAN",
-            "holiday_date": parsed_date.strftime("%Y-%m-%d"),
+            "holiday_date": formatted_date,
             "holiday_month": parsed_date.month,
             "holiday_year": parsed_date.year,
             "holiday_day_of_week": parsed_date.strftime("%A"),
@@ -116,33 +124,22 @@ for row in tbody.find_all("tr"):
             "created_at": now_utc,
             "updated_at": now_utc
         }
-
-        output_data.append(holiday_json)
-
-print(f"✅ Records scraped: {len(output_data)}")
+        new_records.append(holiday_json)
 
 # =====================================
-# 6️⃣ Simple Append Logic (As Requested)
+# 7️⃣ Save Data
 # =====================================
-output_file = "canada_system_closures.json"
-
-if os.path.exists(output_file):
-    with open(output_file, "r", encoding="utf-8") as f:
-        existing_data = json.load(f)
-        existing_data.extend(output_data)
-
+if new_records:
+    existing_data.extend(new_records)
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(existing_data, f, indent=4)
-
+    print(f"✅ Added {len(new_records)} new records.")
 else:
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, indent=4)
-
-print("✅ JSON file updated successfully.")
+    print("ℹ️ No new holidays found.")
 
 # =====================================
-# 7️⃣ Preview
+# 8️⃣ Preview Newest
 # =====================================
-if output_data:
-    print("\n📅 Sample Record:")
-    print(json.dumps(output_data[0], indent=4))
+if new_records:
+    print("\n📅 Sample New Record:")
+    print(json.dumps(new_records[0], indent=4))
