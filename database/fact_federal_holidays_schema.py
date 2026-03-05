@@ -61,7 +61,7 @@ def create_table(cursor):
         -- =============================
 
         CONSTRAINT chk_fact_federal_holidays_country_code
-            CHECK (holiday_country_code IN ('USA')),
+            CHECK (holiday_country_code IN ('USA','CAN','GBR')),
 
         CONSTRAINT chk_fact_federal_holidays_month
             CHECK (holiday_month BETWEEN 1 AND 12),

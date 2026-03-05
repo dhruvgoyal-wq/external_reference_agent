@@ -4,7 +4,7 @@
     "rate_country_code": "GB",
     "rate_type": "sonia_rate",
     "rate_authority_name": "bank_of_england",
-    "rate_effective_date": "26 Feb 26",
+    "rate_effective_date": "2026-02-26",
     "rate_expiry_date": null,
     "is_rate_current": true,
     "rate_current_value_pct": 3.7286,
