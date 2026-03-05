@@ -1,45 +1,7 @@
 import json
 import uuid
 import csv
-from datetime import datetime
-
-# ─────────────────────────────────────────────
-# HELPER: classification_type + severity from Basel score
-# ─────────────────────────────────────────────
-def basel_classification(score):
-    if score >= 7.0:
-        return "high_risk", 4
-    elif score >= 6.0:
-        return "increased_monitoring", 3
-    elif score >= 5.0:
-        return "elevated_concern", 2
-    else:
-        return "standard", 1
-
-# ─────────────────────────────────────────────
-# HELPER: pick worst-case classification across frameworks
-# Priority: sanctioned(5) > black_list(4) > grey_list / high_risk(3-4)
-#           > increased_monitoring(3) > elevated_concern(2) > standard(1)
-# ─────────────────────────────────────────────
-SEVERITY_ORDER = {
-    "sanctioned": 5,
-    "black_list": 4,
-    "high_risk": 4,
-    "grey_list": 3,
-    "increased_monitoring": 3,
-    "non_cooperative": 3,
-    "elevated_concern": 2,
-    "standard": 1,
-}
-
-def merge_classification(fatf_type, basel_type):
-    """Return the higher-risk classification_type and its severity."""
-    fatf_sev  = SEVERITY_ORDER.get(fatf_type,  0)
-    basel_sev = SEVERITY_ORDER.get(basel_type, 0)
-    if fatf_sev >= basel_sev:
-        return fatf_type,  fatf_sev
-    else:
-        return basel_type, basel_sev
+from datetime import datetime, UTC
 
 # ─────────────────────────────────────────────
 # ISO3 lookup
@@ -102,12 +64,12 @@ name_to_iso3 = {
     "Virgin Islands (UK)": "VGB",
 }
 
-NOW = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+# Use UTC time in ISO format
+NOW = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 # ─────────────────────────────────────────────
-# STEP 1: Load FATF Black List
+# STEP 1: Load FATF High Risk Jurisdictions
 # ─────────────────────────────────────────────
-# country_name → {classification_type, severity, url, effective_date}
 fatf_data = {}
 
 with open("black-grey-lists/high-risk-jurisdictions.csv", "r", encoding="utf-8") as f:
@@ -118,14 +80,14 @@ with open("black-grey-lists/high-risk-jurisdictions.csv", "r", encoding="utf-8")
             country = row[0].strip()
             url     = row[1].strip()
             fatf_data[country] = {
-                "classification_type": "black_list",
-                "classification_severity": 4,
+                "classification_type": "high_risk",
+                "classification_severity": 2,
                 "url": url,
                 "effective_date": "2025-02-01",
             }
 
 # ─────────────────────────────────────────────
-# STEP 2: Load FATF Grey List
+# STEP 2: Load FATF Jurisdictions under Increased Monitoring
 # ─────────────────────────────────────────────
 with open("black-grey-lists/jurisdictions-under-increased-monitoring.csv", "r", encoding="utf-8") as f:
     next(f)  # skip header
@@ -135,8 +97,8 @@ with open("black-grey-lists/jurisdictions-under-increased-monitoring.csv", "r", 
             country = row[0].strip()
             url     = row[1].strip()
             fatf_data[country] = {
-                "classification_type": "grey_list",
-                "classification_severity": 3,
+                "classification_type": "jurisd_under_increased_monitoring",
+                "classification_severity": 1,
                 "url": url,
                 "effective_date": "2025-02-01",
             }
@@ -144,9 +106,7 @@ with open("black-grey-lists/jurisdictions-under-increased-monitoring.csv", "r", 
 # ─────────────────────────────────────────────
 # STEP 3: Load Basel AML Index
 # ─────────────────────────────────────────────
-# country_name → {score, rank}
 basel_data = {}
-
 with open("basel_aml_score/basel_governance_ranking.csv", "r", encoding="utf-8") as f:
     next(f)  # skip header
     reader = csv.reader(f)
@@ -171,40 +131,32 @@ for country in sorted(all_countries):
 
     # — FATF fields —
     fatf_type     = fatf_data[country]["classification_type"]      if has_fatf  else None
+    fatf_sev      = fatf_data[country]["classification_severity"]  if has_fatf  else 0
     fatf_url      = fatf_data[country]["url"]                      if has_fatf  else None
     fatf_eff_date = fatf_data[country]["effective_date"]           if has_fatf  else None
 
     # — Basel fields —
     basel_score   = basel_data[country]["score"]                   if has_basel else None
-    if has_basel:
-        basel_type, _ = basel_classification(basel_score)
-    else:
-        basel_type = None
 
-    # — Merged classification (worst-case wins) —
-    if has_fatf and has_basel:
-        merged_type, merged_severity = merge_classification(fatf_type, basel_type)
-        stats["both"] += 1
-    elif has_fatf:
-        merged_type     = fatf_type
-        merged_severity = fatf_data[country]["classification_severity"]
-        stats["fatf_only"] += 1
-    else:
-        merged_type, merged_severity = basel_classification(basel_score)
-        stats["basel_only"] += 1
+    # — Refined classification (Strictly FATF) —
+    classification_type     = fatf_type
+    classification_severity = fatf_sev
 
     # — Source framework label —
     if has_fatf and has_basel:
         source_framework        = "FATF,BASEL"
         framework_body_full_name = "Financial Action Task Force; Basel Committee on Banking Supervision"
+        stats["both"] += 1
     elif has_fatf:
         source_framework        = "FATF"
         framework_body_full_name = "Financial Action Task Force"
+        stats["fatf_only"] += 1
     else:
         source_framework        = "BASEL"
         framework_body_full_name = "Basel Committee on Banking Supervision"
+        stats["basel_only"] += 1
 
-    # — Source URLs (pipe-separated when both present) —
+    # — Source URLs —
     urls = []
     if has_fatf:
         urls.append(fatf_url)
@@ -212,13 +164,11 @@ for country in sorted(all_countries):
         urls.append("https://index.baselgovernance.org/ranking")
     source_reference_url = " | ".join(urls)
 
-    # — Effective date: earliest across available sources —
+    # — Effective date —
     dates = []
-    if has_fatf:
-        dates.append(fatf_eff_date)
-    if has_basel:
-        dates.append("2024-01-01")
-    effective_date = min(dates)
+    if has_fatf: dates.append(fatf_eff_date)
+    if has_basel: dates.append("2024-01-01")
+    effective_date = min(dates) if dates else None
 
     records.append({
         "risk_registry_id":          str(uuid.uuid4()),
@@ -226,18 +176,15 @@ for country in sorted(all_countries):
         "country_name":              country,
         "source_framework":          source_framework,
         "framework_body_full_name":  framework_body_full_name,
-        "classification_type":       merged_type,
-        "classification_severity":   merged_severity,
+        "classification_type":       classification_type,
+        "classification_severity":   classification_severity,
         "sanctions_programme_name":  None,
         "effective_date":            effective_date,
         "expiration_date":           None,
         "is_currently_active":       True,
         "applies_to_country":        "ALL",
-        "fatf_mutual_evaluation_rating": None,
-        "fatf_classification_type":  fatf_type,          # FATF-specific label preserved
         "basel_aml_index_score":     basel_score,
         "basel_aml_index_year":      2024 if has_basel else None,
-        "basel_classification_type": basel_type,         # Basel-specific label preserved
         "source_reference_url":      source_reference_url,
         "source_document_date":      effective_date,
         "created_at":                NOW,
