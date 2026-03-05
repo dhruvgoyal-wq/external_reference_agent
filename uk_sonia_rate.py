@@ -48,7 +48,7 @@ for row in rows:
         clean_values.append(Decimal(match.group()))
 
     if len(clean_values) >= 2:
-        break  # we only need current + previous
+        break
 
 if len(clean_values) < 1:
     raise Exception("No valid SONIA values found.")
@@ -97,12 +97,37 @@ output_json = {
     "updated_at": now_utc.isoformat()
 }
 
-if os.path.exists("uk_sonia_rate.json"):
-    with open("uk_sonia_rate.json", "r") as f:
+file_name = "uk_sonia_rate.json"
+
+# -----------------------------
+# Load Existing Data
+# -----------------------------
+if os.path.exists(file_name):
+    with open(file_name, "r") as f:
         existing_data = json.load(f)
-        existing_data.append(output_json)
-    with open("uk_sonia_rate.json", "w") as f:
-        json.dump(existing_data, f, indent=2)
 else:
-    with open("uk_sonia_rate.json", "w") as f:
-        json.dump([output_json], f, indent=2)
+    existing_data = []
+
+# -----------------------------
+# Build Set of Existing Dates
+# -----------------------------
+existing_dates = set()
+
+for entry in existing_data:
+    if "rate_effective_date" in entry:
+        existing_dates.add(entry["rate_effective_date"])
+
+# -----------------------------
+# Insert Only If Date Not Exists
+# -----------------------------
+if output_json["rate_effective_date"] not in existing_dates:
+
+    existing_data.append(output_json)
+
+    with open(file_name, "w") as f:
+        json.dump(existing_data, f, indent=2)
+
+    print("New SONIA rate inserted for:", output_json["rate_effective_date"])
+
+else:
+    print("Duplicate detected. SONIA rate already exists for:", output_json["rate_effective_date"])

@@ -24,9 +24,6 @@ response.raise_for_status()
 
 soup = BeautifulSoup(response.text, "html.parser")
 
-# -----------------------------
-# Locate Prime Rates table
-# -----------------------------
 prime_table = None
 
 for table in soup.find_all("table"):
@@ -38,9 +35,6 @@ for table in soup.find_all("table"):
 if prime_table is None:
     raise Exception("Prime Rates table not found. Page likely requires JavaScript.")
 
-# -----------------------------
-# Extract U.S. row
-# -----------------------------
 current_value = None
 prev_value = None
 
@@ -102,12 +96,35 @@ output_json = {
     "updated_at": now_utc.isoformat()
 }
 
-if os.path.exists("us_prime_rate.json"):
-    with open("us_prime_rate.json", "r") as f:
+file_name = "us_prime_rate.json"
+
+# -----------------------------
+# Load Existing JSON
+# -----------------------------
+if os.path.exists(file_name):
+    with open(file_name, "r") as f:
         existing_data = json.load(f)
-        existing_data.append(output_json)
-    with open("us_prime_rate.json", "w") as f:
-        json.dump(existing_data, f, indent=2)
 else:
-    with open("us_prime_rate.json", "w") as f:
-        json.dump([output_json], f, indent=2)
+    existing_data = []
+
+# -----------------------------
+# Check for Duplicate Dates
+# -----------------------------
+existing_dates = set()
+
+for entry in existing_data:
+    if "rate_effective_date" in entry:
+        existing_dates.add(entry["rate_effective_date"])
+
+# -----------------------------
+# Append Only If Date Not Exists
+# -----------------------------
+if output_json["rate_effective_date"] not in existing_dates:
+    existing_data.append(output_json)
+
+    with open(file_name, "w") as f:
+        json.dump(existing_data, f, indent=2)
+
+    print("New record inserted for date:", output_json["rate_effective_date"])
+else:
+    print("Duplicate detected. Record for this date already exists. No insertion performed.")
